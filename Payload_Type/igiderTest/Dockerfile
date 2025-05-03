@@ -27,6 +27,6 @@ RUN if [ "$(uname)" = "Darwin" ]; then \
 
 COPY . /Mythic/
 
-WORKDIR /Mythic/Payload_Type/igiderTest
+WORKDIR /Mythic/
 
 CMD ["python3", "main.py"]
