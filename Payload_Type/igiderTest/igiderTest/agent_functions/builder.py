@@ -45,7 +45,7 @@ class IgiderTestAgent(PayloadType):
                 except Exception as p:
                     pass
             base_code = open(
-                self.agent_code_path / "base" / "apfell-jxa.js", "r"
+                self.agent_code_path / "base" / "main_agent.py", "r"
             ).read()
             await SendMythicRPCPayloadUpdatebuildStep(MythicRPCPayloadUpdateBuildStepMessage(
                 PayloadUUID=self.uuid,
@@ -57,7 +57,7 @@ class IgiderTestAgent(PayloadType):
             base_code = base_code.replace("COMMANDS_HERE", command_code)
             all_c2_code = ""
             if len(self.c2info) != 1:
-                resp.build_stderr = "Apfell only supports one C2 Profile at a time"
+                resp.build_stderr = "igidir only supports one C2 Profile at a time"
                 resp.set_status(BuildStatus.Error)
                 return resp
             for c2 in self.c2info:
