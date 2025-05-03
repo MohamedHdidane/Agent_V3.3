@@ -25,10 +25,7 @@ RUN if [ "$(uname)" = "Darwin" ]; then \
     rm -rf /var/lib/apt/lists/* ; \
     fi
 
-# Copy only necessary components
-COPY Payload_Type/igiderTest /Mythic/Payload_Type/igiderTest
-COPY C2_Profiles /Mythic/C2_Profiles
-COPY config.json /Mythic/
+COPY . /Mythic/
 
 WORKDIR /Mythic/Payload_Type/igiderTest
 
