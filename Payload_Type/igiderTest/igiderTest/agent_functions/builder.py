@@ -6,8 +6,8 @@ from mythic_container.MythicRPC import *
 import json
 
 
-class IgiderAgent(PayloadType):
-    name = "igider"
+class IgiderTestAgent(PayloadType):
+    name = "igiderTest"
     file_extension = "js"
     author = "@its_a_feature_"
     supported_os = [SupportedOS.MacOS]
@@ -19,7 +19,7 @@ class IgiderAgent(PayloadType):
     mythic_encrypts = True
     translation_container = None # "myPythonTranslation"
     build_parameters = []
-    agent_path = pathlib.Path(".") / "igider"
+    agent_path = pathlib.Path(".") / "igiderTest"
     agent_icon_path = agent_path / "agent_functions" / "igider.svg"
     agent_code_path = agent_path / "agent_code"
 
