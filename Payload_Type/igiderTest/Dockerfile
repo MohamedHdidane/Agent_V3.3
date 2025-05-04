@@ -1,32 +1,27 @@
-FROM itsafeaturemythic/mythic_python_go:latest
+FROM python:3.9-slim
 
-# Core Python dependencies (cross-platform)
-RUN pip3 install \
-    python-dotenv \
-    mythic_container==0.5.25 \
-    psutil \
-    requests \
-    cryptography \
-    pefile \
-    python-magic
-
-# Platform-specific dependencies
-RUN if [ "$(uname)" = "Darwin" ]; then \
-    # macOS requirements
-    pip3 install \
-        pyobjc-core \
-        pyobjc-framework-Cocoa \
-        xattr; \
-    else \
-    # Linux requirements
-    apt-get update && apt-get install -y \
-        file \
-        libmagic1 && \
-    rm -rf /var/lib/apt/lists/* ; \
-    fi
-
-COPY . /Mythic/
-
+# Set working directory
 WORKDIR /Mythic/
 
-CMD ["python3", "main.py"]
+# Install dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    gcc \
+    python3-dev \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+RUN pip install --no-cache-dir \
+    mythic-payloadtype-container \
+    aiohttp \
+    pyinstaller
+
+# Copy payload type files
+COPY . /Mythic/
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+
+# Start payload container when container starts
+ENTRYPOINT ["python", "main.py"]

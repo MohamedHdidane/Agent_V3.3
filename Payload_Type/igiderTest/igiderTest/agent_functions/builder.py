@@ -1,100 +1,206 @@
-import logging
-import pathlib
-from mythic_container.PayloadBuilder import *
-from mythic_container.MythicCommandBase import *
-from mythic_container.MythicRPC import *
+from mythic_payloadtype_container.PayloadBuilder import *
+import asyncio
+import os
+import tempfile
+import shutil
+import zipfile
+import base64
+import subprocess
+import sys
+import uuid
+from distutils.dir_util import copy_tree
 import json
 
-
-class IgiderTestAgent(PayloadType):
+class igiderTest(PayloadType):
     name = "igiderTest"
-    file_extension = "js"
-    author = "@its_a_feature_"
-    supported_os = [SupportedOS.MacOS]
+    file_extension = "bin"
+    author = "igider"
+    supported_os = [
+        SupportedOS.Linux,
+        SupportedOS.MacOS,
+        SupportedOS.Windows
+    ]
     wrapper = False
     wrapped_payloads = []
-    note = """This payload uses JavaScript for Automation (JXA) for execution on macOS boxes."""
-    supports_dynamic_loading = True
-    c2_profiles = ["http"]
-    mythic_encrypts = True
-    translation_container = None # "myPythonTranslation"
-    build_parameters = []
-    agent_path = pathlib.Path(".") / "igiderTest"
-    agent_icon_path = agent_path / "agent_functions" / "igider.svg"
-    agent_code_path = agent_path / "agent_code"
-
-    build_steps = [
-        BuildStep(step_name="Gathering Files", step_description="Making sure all commands have backing files on disk"),
-        BuildStep(step_name="Configuring", step_description="Stamping in configuration values")
+    note = "A simple agent that can run the 'ls' command"
+    supports_dynamic_loading = False
+    build_parameters = [
+        BuildParameter(
+            name="output_type",
+            parameter_type=BuildParameterType.ChooseOne,
+            description="Choose the output format",
+            choices=["binary", "python"],
+            default_value="binary",
+            required=False
+        ),
     ]
-
+    c2_profiles = ["http"]
+    
     async def build(self) -> BuildResponse:
-        # this function gets called to create an instance of your payload
-        resp = BuildResponse(status=BuildStatus.Success)
-        # create the payload
-        build_msg = ""
-
-        #create_payload = await MythicRPC().execute("create_callback", payload_uuid=self.uuid, c2_profile="http")
+        # Create the build response
+        resp = BuildResponse(status=BuildStatus.Error)
+        
         try:
-            command_code = ""
-            for cmd in self.commands.get_commands():
-                try:
-                    command_code += (
-                            open(self.agent_code_path / "{}.js".format(cmd), "r").read() + "\n"
-                    )
-                except Exception as p:
-                    pass
-            base_code = open(
-                self.agent_code_path / "base" / "main_agent.py", "r"
-            ).read()
-            await SendMythicRPCPayloadUpdatebuildStep(MythicRPCPayloadUpdateBuildStepMessage(
-                PayloadUUID=self.uuid,
-                StepName="Gathering Files",
-                StepStdout="Found all files for payload",
-                StepSuccess=True
-            ))
-            base_code = base_code.replace("UUID_HERE", self.uuid)
-            base_code = base_code.replace("COMMANDS_HERE", command_code)
-            all_c2_code = ""
-            if len(self.c2info) != 1:
-                resp.build_stderr = "igidir only supports one C2 Profile at a time"
-                resp.set_status(BuildStatus.Error)
-                return resp
+            # Create a temporary build directory
+            build_dir = tempfile.mkdtemp()
+            agent_dir = os.path.join(build_dir, "agent")
+            os.makedirs(agent_dir, exist_ok=True)
+            
+            # Copy agent code to build directory
+            agent_code_dir = os.path.join(self.agent_code_path, "base")
+            shutil.copy(os.path.join(agent_code_dir, "main_agent.py"), os.path.join(agent_dir, "main_agent.py"))
+            
+            # Copy command implementations
+            commands_dir = os.path.join(agent_dir, "commands")
+            os.makedirs(commands_dir, exist_ok=True)
+            
+            # Copy ls command implementation
+            shutil.copy(os.path.join(self.agent_code_path, "ls.py"), os.path.join(commands_dir, "ls.py"))
+            
+            # Create __init__.py files for Python packages
+            with open(os.path.join(agent_dir, "__init__.py"), "w") as f:
+                f.write("")
+            with open(os.path.join(commands_dir, "__init__.py"), "w") as f:
+                f.write("")
+            
+            # Create a launcher script
+            with open(os.path.join(agent_dir, "launcher.py"), "w") as f:
+                f.write("""
+import asyncio
+import os
+import sys
+from main_agent import BaseAgent
+from commands.ls import ls_command
+
+# Import C2 profile based on build configuration
+from c2profile import C2Profile
+
+async def main():
+    # Initialize the agent
+    agent = BaseAgent()
+    
+    # Register commands
+    agent.register_command("ls", ls_command)
+    
+    # Setup C2 profile
+    c2_profile = C2Profile()
+    agent.set_c2_profile(c2_profile)
+    
+    # Start the agent
+    await agent.start()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+""")
+            
+            # Create C2 profile loader
+            c2_dir = os.path.join(agent_dir, "c2profile")
+            os.makedirs(c2_dir, exist_ok=True)
+            with open(os.path.join(c2_dir, "__init__.py"), "w") as f:
+                f.write("")
+            
+            # Process C2 profiles
             for c2 in self.c2info:
-                c2_code = ""
-                try:
-                    profile = c2.get_c2profile()
-                    c2_code = open(
-                        self.agent_code_path
-                        / "c2_profiles"
-                        / "{}.js".format(profile["name"]),
-                        "r",
-                    ).read()
-                    for key, val in c2.get_parameters_dict().items():
-                        if key == "AESPSK":
-                            c2_code = c2_code.replace(key, val["enc_key"] if val["enc_key"] is not None else "")
-                        elif not isinstance(val, str):
-                            c2_code = c2_code.replace(key, json.dumps(val))
-                        else:
-                            c2_code = c2_code.replace(key, val)
-                except Exception as p:
-                    build_msg += str(p)
-                    pass
-                all_c2_code += c2_code
-            base_code = base_code.replace("C2PROFILE_HERE", all_c2_code)
-            await SendMythicRPCPayloadUpdatebuildStep(MythicRPCPayloadUpdateBuildStepMessage(
-                PayloadUUID=self.uuid,
-                StepName="Configuring",
-                StepStdout="Stamped in all of the fields",
-                StepSuccess=True
-            ))
-            resp.payload = base_code.encode()
-            if build_msg != "":
-                resp.build_stderr = build_msg
-                resp.set_status(BuildStatus.Error)
-            else:
-                resp.build_message = "Successfully built!\n"
-        except Exception as e:
-            resp.set_status(BuildStatus.Error)
-            resp.build_stderr = "Error building payload: " + str(e)
-        return resp
+                profile_name = c2.get_c2profile()["name"]
+                c2_code_path = os.path.join(self.agent_code_path, "c2_profiles", f"{profile_name}.py")
+                
+                if os.path.exists(c2_code_path):
+                    # Copy C2 code
+                    shutil.copy(c2_code_path, os.path.join(c2_dir, f"{profile_name}.py"))
+                    
+                    # Create C2 profile loader
+                    with open(os.path.join(c2_dir, "c2profile.py"), "w") as f:
+                        f.write(f"""
+# Import the appropriate C2 profile
+from c2profile.{profile_name} import {profile_name.capitalize()}Profile
+
+class C2Profile({profile_name.capitalize()}Profile):
+    def __init__(self):
+        # C2 configuration from build parameters
+        config = {json.dumps(c2.get_parameters_dict())}
+        super().__init__(config)
+""")
+            
+            # Decide on output format
+            output_type = self.get_parameter("output_type")
+            
+            if output_type == "binary":
+                # Use PyInstaller to create a binary
+                if sys.platform == "win32":
+                    python_executable = "python"
+                else:
+                    python_executable = "python3"
+                
+                # Create PyInstaller spec file
+                spec_file = os.path.join(build_dir, "agent.spec")
+                with open(spec_file, "w") as f:
+                    f.write(f"""
+# -*- mode: python ; coding: utf-8 -*-
+
+block_cipher = None
+
+a = Analysis(
+    ['{os.path.join(agent_dir, "launcher.py").replace("\\", "/")}'],
+    pathex=['{agent_dir.replace("\\", "/")}'],
+    binaries=[],
+    datas=[],
+    hiddenimports=['asyncio'],
+    hookspath=[],
+    runtime_hooks=[],
+    excludes=[],
+    win_no_prefer_redirects=False,
+    win_private_assemblies=False,
+    cipher=block_cipher,
+    noarchive=False
+)
+
+pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+
+exe = EXE(
+    pyz,
+    a.scripts,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    [],
+    name='igiderTest',
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    runtime_tmpdir=None,
+    console=False
+)
+""")
+                
+                # Run PyInstaller
+                proc = await asyncio.create_subprocess_shell(
+                    f"{python_executable} -m PyInstaller --onefile --clean {spec_file}",
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    cwd=build_dir
+                )
+                stdout, stderr = await proc.communicate()
+                
+                if proc.returncode != 0:
+                    resp.build_stderr = f"Failed to build binary: {stderr.decode()}"
+                    return resp
+                
+                # Get the output file
+                if sys.platform == "win32":
+                    output_file = os.path.join(build_dir, "dist", "igiderTest.exe")
+                else:
+                    output_file = os.path.join(build_dir, "dist", "igiderTest")
+                
+                if not os.path.exists(output_file):
+                    resp.build_stderr = f"Failed to find output file at {output_file}"
+                    return resp
+                
+                # Read the binary and return it
+                with open(output_file, "rb") as f:
+                    file_data = f.read()
+                
+                resp.payload = file_data
+                resp.build_message = "Successfully built binary payload"
+                resp.status = BuildStatus.Success
