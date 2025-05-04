@@ -1,9 +1,45 @@
 {
-    "display_name": "igiderTest",
-    "description": "A sample C2 agent for Mythic that runs the ls command",
-    "author": "igider",
-    "mythic_server_host": "mythic_server",
-    "mythic_server_port": 7443,
-    "current_version": "1.0",
-    "contact_info": "https://github.com/igider/mythic-c2-agent"
+    "name": "igiderTest",
+    "version": "1.0",
+    "description": "A Python-based Mythic agent for educational purposes",
+    "author": "Mythic Developer",
+    "supported_os": ["Windows", "Linux", "macOS"],
+    "wrapper": false,
+    "supports_dynamic_loading": false,
+    "c2_profiles": ["http"],
+    "commands": [
+        {
+            "name": "ls",
+            "version": 1,
+            "is_exit": false,
+            "help_string": "ls [directory]",
+            "description": "List contents of a directory",
+            "needs_admin": false,
+            "parameters": [
+                {
+                    "name": "path",
+                    "type": "String",
+                    "description": "Path to enumerate",
+                    "required": false,
+                    "default_value": "."
+                }
+            ]
+        }
+    ],
+    "build_parameters": [
+        {
+            "name": "version",
+            "description": "Agent version",
+            "type": "String", 
+            "default_value": "1.0",
+            "required": false
+        },
+        {
+            "name": "debug",
+            "description": "Enable debug output",
+            "type": "Boolean",
+            "default_value": false,
+            "required": false
+        }
+    ]
 }

