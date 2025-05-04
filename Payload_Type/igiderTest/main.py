@@ -11,7 +11,7 @@ logging.basicConfig(
 )
 
 # Import our payload type
-from igiderTest.igiderTest.agent_functions import *
+import igiderTest
 
 # Start the mythic container
 mythic_container.mythic_service.start_and_run_forever()
