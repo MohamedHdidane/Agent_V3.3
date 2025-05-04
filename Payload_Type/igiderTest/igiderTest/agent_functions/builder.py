@@ -7,8 +7,8 @@ import tempfile
 import base64
 import uuid
 
-class IgiderTest(PayloadType):
-    name = "igiderTest"
+class igidertest(PayloadType):
+    name = "igidertest"
     file_extension = "bin"
     author = "Mythic Developer"
     supported_os = [

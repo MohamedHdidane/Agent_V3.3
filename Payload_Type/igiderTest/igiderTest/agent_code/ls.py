@@ -1,5 +1,5 @@
 """
-Implementation of the 'ls' command for the igiderTest agent.
+Implementation of the 'ls' command for the igidertest agent.
 This is used by the main agent to list directory contents.
 """
 import os

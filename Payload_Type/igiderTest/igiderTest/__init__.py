@@ -1,5 +1,5 @@
 """
-igiderTest agent module initialization file.
+igidertest agent module initialization file.
 """
 from mythic_container.MythicCommandBase import *
 from mythic_container.MythicRPC import *

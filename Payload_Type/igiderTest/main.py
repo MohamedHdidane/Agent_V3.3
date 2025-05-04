@@ -9,11 +9,11 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
-logger = logging.getLogger("igiderTest")
+logger = logging.getLogger("igidertest")
 
 async def main():
     try:
-        logger.info("Starting igiderTest Mythic agent handler...")
+        logger.info("Starting igidertest Mythic agent handler...")
         # Start the mythic container service
         await mythic_container.mythic_service.start_services()
         # Just hang out forever

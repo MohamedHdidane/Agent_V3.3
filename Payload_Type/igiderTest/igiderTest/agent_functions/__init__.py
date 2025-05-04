@@ -1,5 +1,5 @@
 """
-This module contains all the command implementations for the igiderTest agent.
+This module contains all the command implementations for the igidertest agent.
 """
 import json
 from mythic_container.MythicCommandBase import *

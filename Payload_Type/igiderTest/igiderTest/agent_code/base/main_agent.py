@@ -14,7 +14,7 @@ from datetime import datetime
 VERSION = "{{VERSION}}"
 DEBUG = False
 
-class IgiderTestAgent:
+class igidertestAgent:
     def __init__(self):
         self.uuid = self.generate_uuid()
         self.hostname = socket.gethostname()
@@ -23,7 +23,7 @@ class IgiderTestAgent:
         self.commands = {
             "ls": self.ls_command
         }
-        self.debug_print(f"IgiderTest Agent v{VERSION} initialized")
+        self.debug_print(f"igidertest Agent v{VERSION} initialized")
         self.debug_print(f"UUID: {self.uuid}")
         
     def debug_print(self, message):
@@ -163,5 +163,5 @@ class IgiderTestAgent:
 
 # Main execution
 if __name__ == "__main__":
-    agent = IgiderTestAgent()
+    agent = igidertestAgent()
     agent.run()
