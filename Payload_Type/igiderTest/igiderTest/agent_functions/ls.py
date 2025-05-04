@@ -1,4 +1,4 @@
-from mythic_payloadtype_container.MythicCommandBase import *
+from mythic_container.MythicCommandBase import *
 import json
 from typing import Dict, List, Tuple, Optional
 

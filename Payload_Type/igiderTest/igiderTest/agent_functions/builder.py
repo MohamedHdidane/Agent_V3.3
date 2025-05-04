@@ -1,4 +1,4 @@
-from mythic_payloadtype_container.PayloadBuilder import *
+from mythic_container.PayloadBuilder import *
 import asyncio
 import os
 import tempfile
