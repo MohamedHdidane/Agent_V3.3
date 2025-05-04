@@ -13,7 +13,7 @@ RUN apt-get update && \
 
 # Install Python dependencies
 RUN pip install --no-cache-dir \
-    mythic-payloadtype-container \
+    mythic_container \
     aiohttp \
     pyinstaller
 

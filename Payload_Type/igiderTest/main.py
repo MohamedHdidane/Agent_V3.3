@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from mythic_payloadtype_container import mythic_container
+import mythic_container
 import os
 import sys
 import logging
@@ -14,4 +14,4 @@ logging.basicConfig(
 from igiderTest.igiderTest.agent_functions import *
 
 # Start the mythic container
-mythic_container.start_and_run_forever()
+mythic_container.mythic_service.start_and_run_forever()
